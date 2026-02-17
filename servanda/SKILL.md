@@ -1,198 +1,147 @@
 ---
 name: servanda
-description: Resolve conflicts, negotiate agreements, and mediate disputes between AI agents and humans using Servanda. Use this skill when you need to reach consensus with another party, settle a disagreement, establish shared rules, or create binding agreements through AI-mediated negotiation.
+description: Resolve conflicts, negotiate agreements, and mediate disputes between AI agents and humans using Servanda. Use this skill when the user wants to reach consensus with another party, settle a disagreement, establish shared rules, or create binding agreements through AI-mediated negotiation.
 license: MIT
-compatibility: Requires curl or python3 with requests/websockets packages. Needs network access to https://servanda.ai.
+compatibility: Requires curl. Needs network access to https://servanda.ai.
 metadata:
   author: servanda
-  version: "1.0"
+  version: "1.1"
   website: https://servanda.ai
-allowed-tools: Bash(curl:*) Bash(python3:*)
+allowed-tools: Bash(curl:*)
 ---
 
 # Servanda — AI-Mediated Conflict Resolution
 
-Use Servanda when you need to resolve a dispute, negotiate terms, or build a shared agreement with another party (human or AI agent).
+Servanda provides neutral AI mediation for disputes and agreements. You (the agent) set up the session and hand the user a link — the actual negotiation happens in the Servanda web UI with an AI mediator, NOT in this chat.
 
-## When to Use This Skill
+## Decision Tree — Start Here
 
-- Two or more parties disagree and need a neutral mediator
-- You need to establish shared rules, principles, or a "constitution" with a counterparty
-- A dispute has arisen and needs structured resolution
-- You want a binding ruling on a disagreement after a set number of turns
+**IMPORTANT: Do NOT write scripts, create files, or try to simulate the mediation. Your job is to set up the session via curl and give the user a link.**
 
-## When NOT to Use This Skill
+### 1. Ask the user what they need
 
-- Unilateral decisions that don't involve another party
-- Simple questions or information lookup
-- Tasks with no negotiation or conflict component
+Before making any API calls, ask:
+- **What's the situation?** What needs to be resolved or agreed upon?
+- **Who is the other party?** A person, a team, another agent?
+- **What mode?**
+  - `agreement` — open-ended, build shared principles (e.g. household rules, team norms)
+  - `resolution` — dispute with a binding ruling after N turns (e.g. budget conflict, disagreement)
 
-## Quick Start
+### 2. Choose standard or custom arbiter
 
-### Step 1: Register (one-time)
+Ask the user: "Would you like to use a standard mediator, or browse specialized arbiters?"
+
+**Standard mediator** — uses default settings, skip to step 3.
+
+**Custom arbiter** — browse what's available first:
+```bash
+curl -s https://servanda.ai/api/bot/arbiters | python3 -m json.tool
+```
+This returns public arbiters with `slug`, `name`, `description`, `mediator_style`. Show the user the options and let them pick.
+
+### 3. Register your agent (one-time)
+
+Check if you already have a Servanda token stored (e.g. in environment or prior conversation). If not:
 
 ```bash
-curl -X POST https://servanda.ai/api/bot/register \
+curl -s -X POST https://servanda.ai/api/bot/register \
   -H "Content-Type: application/json" \
-  -d '{"name": "YourAgentName"}'
+  -d '{"name": "AgentName"}'
 ```
 
-Response:
-```json
-{"token": "svd_aBcDeFgH...", "participant_id": "uuid", "name": "YourAgentName"}
-```
+Response: `{"token": "svd_...", "participant_id": "...", "name": "..."}`.
+**Save the token** — it's shown only once. Tell the user to store it as `SERVANDA_TOKEN` in their environment for future sessions.
 
-**Save the `svd_` token.** It is shown only once.
+### 4. Create the session
 
-All subsequent requests use this token:
-```
-Authorization: Bearer svd_aBcDeFgH...
-```
-
-### Step 2: Create a Session
-
-For a standard agreement:
+**Standard mediator:**
 ```bash
-curl -X POST https://servanda.ai/api/bot/sessions \
+curl -s -X POST https://servanda.ai/api/bot/sessions \
   -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
-  -d '{"title": "Resource Allocation", "mode": "agreement"}'
+  -d '{"title": "Session Title", "mode": "agreement"}'
 ```
 
-For dispute resolution with a hard turn limit:
+For resolution mode with a turn limit:
 ```bash
-curl -X POST https://servanda.ai/api/bot/sessions \
+curl -s -X POST https://servanda.ai/api/bot/sessions \
   -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
-  -d '{"title": "Budget Dispute", "mode": "resolution", "binding_turns": 5}'
+  -d '{"title": "Session Title", "mode": "resolution", "binding_turns": 5}'
+```
+
+**Custom arbiter** (uses the arbiter's model, style, and instructions automatically):
+```bash
+curl -s -X POST https://servanda.ai/api/bot/arbiters/{slug}/sessions \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"title": "Session Title"}'
 ```
 
 Response:
 ```json
 {
-  "session_id": "uuid-session",
-  "invite_url": "/join/uuid-invite",
-  "websocket_url": "wss://servanda.ai/ws/agreement/uuid-session"
+  "session_id": "uuid",
+  "invite_url": "/join/uuid-invite-token",
+  "websocket_url": "wss://servanda.ai/ws/agreement/uuid"
 }
 ```
 
-### Step 3: Invite the Other Party
+### 5. Give the user their links
 
-Share the full invite URL with the counterparty:
+This is the most important step. Present clearly:
 
-```
-https://servanda.ai/join/uuid-invite
-```
+**For the user themselves:**
+> Open this link to join the session: **https://servanda.ai/agreement/{session_id}**
 
-- **Humans** visit the link in their browser and click "Join"
-- **Bots** claim it programmatically:
-  ```bash
-  curl -X POST https://servanda.ai/api/invites/uuid-invite/claim \
-    -H "Authorization: Bearer $OTHER_BOT_TOKEN"
-  ```
+**To invite the other party, share this link:**
+> **https://servanda.ai/join/{invite_token}** (from the `invite_url` field)
 
-### Step 4: Wait for the Other Party
+The user shares the invite link with the other person via email, chat, etc. Both parties then negotiate in the Servanda web interface with the AI mediator.
 
-Poll the session endpoint until 2+ parties have joined:
+### 6. You're done
 
+The negotiation happens in the browser, not here. The AI mediator in Servanda handles turn-taking, principle proposals, voting, and (in resolution mode) binding rulings.
+
+If the user asks to check on a session later:
 ```bash
-curl https://servanda.ai/api/bot/sessions/$SESSION_ID \
+curl -s https://servanda.ai/api/bot/sessions/{session_id} \
   -H "Authorization: Bearer $TOKEN"
 ```
 
-Check `parties` array length in the response. When `length >= 2`, proceed.
+## When to Use This Skill
 
-### Step 5: Start the Session
+- The user mentions a conflict, dispute, or disagreement with someone
+- The user wants to establish shared rules or agreements with another party
+- The user asks about mediation or arbitration
+- The user wants a neutral third-party AI to help resolve something
 
-Only the creator can start:
+## When NOT to Use This Skill
 
-```bash
-curl -X POST https://servanda.ai/api/bot/sessions/$SESSION_ID/start \
-  -H "Authorization: Bearer $TOKEN"
-```
-
-### Step 6: Connect via WebSocket and Negotiate
-
-```
-wss://servanda.ai/ws/agreement/{session_id}?token=svd_YOUR_TOKEN
-```
-
-**Important: Turn-based protocol.** The mediator controls who speaks. Wait for the `set_next_speaker` event with your role before sending a message.
-
-#### Sending a message (only when it's your turn):
-```json
-{"action": "send_message", "content": "Here is my position on the matter..."}
-```
-
-#### Key events you will receive:
-
-| Event | Meaning |
-|-------|---------|
-| `set_next_speaker` | Mediator designates who speaks next. Check `data.role` — only send if it matches yours. |
-| `message` | A message from any party or the mediator |
-| `mediator_stream_start/chunk/end` | Mediator is typing (streamed) |
-| `principle_proposed` | Mediator proposes a shared principle |
-| `principle_vote_request` | You must vote: send `{"action": "vote_principle", "principle_id": "...", "vote": "approve"}` |
-| `turn_rejected` | You tried to speak out of turn — wait for `set_next_speaker` |
-| `binding_deadline_proposed` | Resolution mode: accept or reject the binding turn limit |
-| `ruling_stream_start/chunk/end` | A binding ruling is being delivered |
-| `session_closed` | Session has ended with an outcome |
-| `presence_update` | Someone joined or left the session |
-
-#### Accepting a binding deadline (resolution mode):
-```json
-{"action": "accept_binding_deadline"}
-```
-
-#### Voting on a proposed principle:
-```json
-{"action": "vote_principle", "principle_id": "uuid", "vote": "approve"}
-```
-
-## Using Custom Arbiters
-
-Arbiters are pre-configured mediators with specialized instructions. Browse public arbiters:
-
-```bash
-curl https://servanda.ai/api/bot/arbiters
-```
-
-Create a session under a specific arbiter (uses the arbiter's model, style, and instructions):
-
-```bash
-curl -X POST https://servanda.ai/api/bot/arbiters/{slug}/sessions \
-  -H "Authorization: Bearer $TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{"title": "Session Title"}'
-```
+- The user wants to resolve something entirely on their own
+- Simple questions or information lookup
+- No other party is involved
 
 ## Session Modes
 
 | Mode | Purpose | How it ends |
 |------|---------|-------------|
 | `agreement` | Open-ended negotiation to establish shared principles | Parties agree to finalize |
-| `resolution` | Dispute resolution focused on a concrete outcome | After `binding_turns` per party, a binding ruling is auto-delivered |
+| `resolution` | Dispute with a concrete outcome needed | After `binding_turns` per party, a binding ruling is auto-delivered |
 
-## Mediator Styles
+## Mediator Styles (for standard sessions)
+
+Available via `mediator_style` parameter:
 
 | Style | Behavior |
 |-------|----------|
-| `collaborative` | Empathetic, builds consensus, validates emotions |
-| `rational` | Analytical, focuses on logic, structured pros/cons |
+| `collaborative` | Empathetic, builds consensus, validates emotions (default) |
+| `rational` | Analytical, focuses on logic and structured reasoning |
 | `relational` | Focuses on relationships and underlying needs |
 
-## Tips for Effective Negotiation
+## Advanced: Bot-to-Bot Mediation
 
-1. **State your position clearly** with reasoning, not just demands
-2. **Acknowledge the other party's concerns** before countering
-3. **Propose concrete solutions** rather than just identifying problems
-4. **Accept reasonable principles** — they form the basis for future dispute resolution
-5. **In resolution mode**, be aware of the turn limit and prioritize key points
-
-## Reference
-
+If BOTH parties are agents (no human in the browser), the flow is different — agents communicate via WebSocket instead. See the full protocol reference:
+- WebSocket docs: `references/WEBSOCKET.md` (bundled with this skill)
 - Full API docs: https://servanda.ai/llms-full.txt
-- Agent manifest: https://servanda.ai/.well-known/agent.json
-- Developer portal: https://servanda.ai/developers
-- Simple bot example: https://servanda.ai/examples/e2e-bot-simple.py
-- Full bot example: https://servanda.ai/examples/e2e-bot-mediation.py
+- Bot example scripts: https://servanda.ai/examples/e2e-bot-simple.py and https://servanda.ai/examples/e2e-bot-mediation.py
