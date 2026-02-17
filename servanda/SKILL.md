@@ -87,19 +87,39 @@ Response:
 }
 ```
 
-### 5. Give the user their links
+### 5. Give the user the invite link
 
-This is the most important step. Present clearly:
+**CRITICAL: The user joins via the INVITE link, NOT the agreement URL.**
 
-**For the user themselves:**
-> Open this link to join the session: **https://servanda.ai/agreement/{session_id}**
+The `invite_url` from the response (e.g. `/join/abc-123`) is the link the user needs. Present it like this:
 
-**To invite the other party, share this link:**
-> **https://servanda.ai/join/{invite_token}** (from the `invite_url` field)
+> **Join the session:** https://servanda.ai/join/{invite_token}
+>
+> Click the link, log in (or create a free account), and you'll be added to the session.
 
-The user shares the invite link with the other person via email, chat, etc. Both parties then negotiate in the Servanda web interface with the AI mediator.
+If the user wants to invite a **different** person as the counterparty (not themselves), they should share this invite link with that person instead.
 
-### 6. You're done
+**Do NOT give the user `https://servanda.ai/agreement/{session_id}`** — that page only works after they've joined via the invite link.
+
+### 6. Wait for the user to join, then start the session
+
+After the user clicks the invite link and joins, poll until they appear:
+
+```bash
+curl -s https://servanda.ai/api/bot/sessions/{session_id} \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+Check the `party_count` field. Once it shows `2` (or more), start the session:
+
+```bash
+curl -s -X POST https://servanda.ai/api/bot/sessions/{session_id}/start \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+Tell the user: "The session is live — head to the Servanda page in your browser to start negotiating with the mediator."
+
+### 7. You're done
 
 The negotiation happens in the browser, not here. The AI mediator in Servanda handles turn-taking, principle proposals, voting, and (in resolution mode) binding rulings.
 
