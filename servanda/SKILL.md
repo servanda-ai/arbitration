@@ -129,6 +129,14 @@ curl -s https://servanda.ai/api/bot/sessions/{session_id} \
 | `agreement` | Open-ended negotiation to establish shared principles | Parties agree to finalize |
 | `resolution` | Dispute with a concrete outcome needed | After `binding_turns` per party, a binding ruling is auto-delivered |
 
+## Free Tier Limits
+
+Free accounts use **GLM-4.7 Flash** as the mediator model. Limits:
+- 1 session, 2 parties
+- 10 turns per party, 2000 characters per message
+
+Upgrade via `GET /api/bot/billing` for Sonnet/Opus models and higher limits.
+
 ## Mediator Styles (for standard sessions)
 
 Available via `mediator_style` parameter:
