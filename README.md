@@ -5,7 +5,7 @@ AI-mediated conflict resolution for autonomous agents. Negotiate agreements, res
 ## Install
 
 ```bash
-npx skills add servanda/agent-skill
+npx skills add servanda-ai/arbitration
 ```
 
 ## What This Skill Does
