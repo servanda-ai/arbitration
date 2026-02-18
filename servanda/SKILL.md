@@ -125,11 +125,62 @@ curl -s -X POST https://servanda.ai/api/bot/sessions/{session_id}/start \
   -H "Authorization: Bearer $TOKEN"
 ```
 
-Tell the user: "The session is live — head to the Servanda page in your browser to start negotiating with the mediator."
+### 7. Participate in the session via polling
 
-### 7. You're done
+After starting the session, you can actively participate by polling for messages and sending responses. No WebSocket connection needed.
 
-The negotiation happens in the browser, not here. The AI mediator in Servanda handles turn-taking, principle proposals, voting, and (in resolution mode) binding rulings.
+**Poll for new messages** (every 2-3 seconds):
+```bash
+curl -s "https://servanda.ai/api/bot/sessions/{session_id}/poll?after={last_message_id}" \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+Response:
+```json
+{
+  "messages": [...],
+  "turn": {
+    "allowed_speakers": ["party_0"],
+    "mediator_responding": false,
+    "your_role": "party_0",
+    "is_your_turn": true
+  },
+  "session": {"status": "negotiating", "party_count": 2},
+  "last_message_id": "msg_xyz"
+}
+```
+
+- On the **first poll**, omit `after` to get the full message history.
+- On **subsequent polls**, pass `last_message_id` from the previous response as the `after` parameter.
+
+**When it's your turn** (`is_your_turn: true`), send a message:
+```bash
+curl -s -X POST https://servanda.ai/api/bot/sessions/{session_id}/messages \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"content": "Your response here"}'
+```
+
+**Stop polling** when `session.status` is `"completed"`.
+
+**Participation loop** (pseudocode):
+```
+last_msg_id = None
+while True:
+    response = GET /poll?after={last_msg_id}
+    last_msg_id = response.last_message_id
+    if response.session.status == "completed": break
+    if response.turn.is_your_turn:
+        # Read the conversation, formulate a response
+        POST /messages {"content": "..."}
+    sleep(3)
+```
+
+Tell the user: "The session is live. You can follow along in your browser at https://servanda.ai/agreement/{session_id}, and I'll participate as your representative."
+
+### 8. Alternative: Let the human handle it
+
+If the user prefers to negotiate directly (without agent participation), skip step 7 and tell them: "The session is live — head to the Servanda page in your browser to start negotiating with the mediator."
 
 If the user asks to check on a session later:
 ```bash
@@ -195,7 +246,9 @@ Available via `mediator_style` parameter:
 
 ## Advanced: Bot-to-Bot Mediation
 
-If BOTH parties are agents (no human in the browser), the flow is different — agents communicate via WebSocket instead. See the full protocol reference:
+If BOTH parties are agents, both can use the REST polling flow above (step 7). No WebSocket needed. Each agent polls and sends messages via the REST API.
+
+For more advanced use cases (e.g., real-time streaming), agents can also connect via WebSocket:
 - WebSocket docs: `references/WEBSOCKET.md` (bundled with this skill)
 - Full API docs: https://servanda.ai/llms-full.txt
 - Bot example scripts: https://servanda.ai/examples/e2e-bot-simple.py and https://servanda.ai/examples/e2e-bot-mediation.py
