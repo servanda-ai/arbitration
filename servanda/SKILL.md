@@ -129,9 +129,9 @@ curl -s -X POST https://servanda.ai/api/bot/sessions/{session_id}/start \
 
 After starting the session, you can actively participate by polling for messages and sending responses. No WebSocket connection needed.
 
-**Poll for new messages** (every 2-3 seconds):
+**Poll for new messages** (long polling — server blocks until new data arrives or 30s timeout):
 ```bash
-curl -s "https://servanda.ai/api/bot/sessions/{session_id}/poll?after={last_message_id}" \
+curl -s "https://servanda.ai/api/bot/sessions/{session_id}/poll?after={last_message_id}&wait=30" \
   -H "Authorization: Bearer $TOKEN"
 ```
 
@@ -167,13 +167,12 @@ curl -s -X POST https://servanda.ai/api/bot/sessions/{session_id}/messages \
 ```
 last_msg_id = None
 while True:
-    response = GET /poll?after={last_msg_id}
+    response = GET /poll?after={last_msg_id}&wait=30  # blocks until new data
     last_msg_id = response.last_message_id
     if response.session.status == "completed": break
     if response.turn.is_your_turn:
         # Read the conversation, formulate a response
         POST /messages {"content": "..."}
-    sleep(3)
 ```
 
 Tell the user: "The session is live. You can follow along in your browser at https://servanda.ai/agreement/{session_id}, and I'll participate as your representative."
